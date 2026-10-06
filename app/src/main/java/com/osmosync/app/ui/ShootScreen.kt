@@ -1,6 +1,8 @@
 package com.osmosync.app.ui
 
 import androidx.camera.view.PreviewView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +18,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -228,6 +232,9 @@ fun ShootScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        // ---- 从相机导入 ----
+        item { ImportCard(logs) }
+
         // ---- 拍摄记录 ----
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -316,4 +323,66 @@ private fun shareAll(context: android.content.Context, logs: List<com.osmosync.a
         }
         context.startActivity(chooser)
     } catch (_: Exception) {}
+}
+
+@Composable
+private fun ImportCard(logs: List<com.osmosync.app.shooter.ShotLogEntry>) {
+    val context = LocalContext.current
+    val importState by com.osmosync.app.importer.CameraImporter.state.collectAsState()
+    val times = logs.map { it.timeMs }
+    val sessionRange = if (times.isNotEmpty()) times.min() to times.max() else null
+    var onlySession by remember { mutableStateOf(false) }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            com.osmosync.app.importer.CameraImporter.start(context, uri, onlySession, sessionRange)
+        }
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("从相机导入照片", fontWeight = FontWeight.Bold)
+            Text(
+                "USB 线把相机连到手机（或用 SD 读卡器），选择相机存储后自动导入 DJI 照片（按文件名去重）",
+                fontSize = 12.sp, color = Color.Gray,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = onlySession,
+                        onCheckedChange = { onlySession = it },
+                        enabled = sessionRange != null,
+                    )
+                    Text("仅导入本次会话时间段", fontSize = 13.sp)
+                }
+                OutlinedButton(onClick = { picker.launch(null) }) { Text("选择相机存储") }
+            }
+            com.osmosync.app.importer.CameraImporter.lastTreeUri(context)?.let {
+                OutlinedButton(onClick = { com.osmosync.app.importer.CameraImporter.start(context, it, onlySession, sessionRange) }) {
+                    Text("重新导入上次存储")
+                }
+            }
+            importState?.let { st ->
+                Text(
+                    st.message,
+                    fontSize = 12.sp,
+                    color = when {
+                        st.running -> Color(0xFFB58500)
+                        st.message.startsWith("导入失败") -> Color(0xFFB3261E)
+                        else -> Color(0xFF1B873B)
+                    },
+                )
+                if (st.running && st.total > 0) {
+                    LinearProgressIndicator(
+                        progress = { st.done.toFloat() / st.total },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            Text(
+                "提示：OA5 Pro（固件 v01.03.0330+）也可在相机菜单里直接用\"互传\"发给手机",
+                fontSize = 11.sp, color = Color.Gray,
+            )
+        }
+    }
 }
