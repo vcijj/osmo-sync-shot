@@ -216,7 +216,11 @@ object Dji {
         val p = ByteArray(9)
         putU32(p, 0, deviceId)
         p[4] = mode.toByte()
-        // 5..8 预留
+        // 5..8 预留：与官方 Demo 逐字节一致（01 47 39 36）
+        p[5] = 0x01
+        p[6] = 0x47
+        p[7] = 0x39
+        p[8] = 0x36
         return p
     }
 

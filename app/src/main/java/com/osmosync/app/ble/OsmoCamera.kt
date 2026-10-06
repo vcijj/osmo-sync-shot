@@ -427,6 +427,22 @@ class OsmoCamera(
         return r != null
     }
 
+    /**
+     * 开始录像：拍录控制指令只在视频模式下生效，
+     * 不在视频模式时先切换模式（官方遥控器同款逻辑）。
+     */
+    suspend fun startRecording(): Boolean {
+        val mode = _ui.value.cameraMode
+        if (mode != Dji.MODE_VIDEO) {
+            switchMode(Dji.MODE_VIDEO)
+            delay(600) // 等相机完成模式切换
+        }
+        return recordControl(true)
+    }
+
+    /** 停止录像 */
+    suspend fun stopRecording(): Boolean = recordControl(false)
+
     /** 让相机进入休眠（0x001A，power_mode=3） */
     suspend fun sleepCamera(): Boolean {
         val r = sendCommand(Dji.CMD_SET_GENERAL, Dji.CMD_POWER_MODE, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.powerMode(Dji.POWER_SLEEP))

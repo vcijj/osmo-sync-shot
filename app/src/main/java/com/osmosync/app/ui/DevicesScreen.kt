@@ -107,13 +107,19 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                         OutlinedButton(onClick = { scope.launch { cam.switchMode(Dji.MODE_PHOTO) } }, enabled = ui.state == LinkState.CONNECTED) {
                             Text("切拍照")
                         }
-                        OutlinedButton(onClick = { scope.launch { cam.recordControl(true) } }, enabled = ui.state == LinkState.CONNECTED) {
+                        OutlinedButton(onClick = {
+                            scope.launch {
+                                if (!cam.startRecording()) {
+                                    app.cameraManager.postMessage("录像指令未应答，请确认相机已连接且不在拍摄中")
+                                }
+                            }
+                        }, enabled = ui.state == LinkState.CONNECTED) {
                             Text("录像")
                         }
                     }
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = { scope.launch { cam.recordControl(false) } }, enabled = ui.state == LinkState.CONNECTED) {
+                        OutlinedButton(onClick = { scope.launch { cam.stopRecording() } }, enabled = ui.state == LinkState.CONNECTED) {
                             Text("停止录像")
                         }
                         OutlinedButton(onClick = { scope.launch { cam.sleepCamera() } }, enabled = ui.state == LinkState.CONNECTED) {
