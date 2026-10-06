@@ -7,6 +7,7 @@ import android.graphics.Path
 import android.graphics.drawable.BitmapDrawable
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -57,7 +59,7 @@ fun TrackScreen(modifier: Modifier = Modifier) {
     val azimuth by app.orientation.azimuth.collectAsState()
     val gpsPushing by app.cameraManager.gpsPushing.collectAsState()
 
-    var useAmap by remember { mutableStateOf(false) }
+    var useAmap by remember { mutableStateOf(true) } // 默认高德瓦片（国内可用），可切 OSM
     var mapRef by remember { mutableStateOf<MapView?>(null) }
     var centeredOnce by remember { mutableStateOf(false) }
     var showClear by remember { mutableStateOf(false) }
@@ -67,7 +69,7 @@ fun TrackScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize()) {
 
         // ---- 摘要与控制 ----
-        Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
             Column(Modifier.padding(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -105,25 +107,32 @@ fun TrackScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // ---- 地图 ----
-        AndroidView(
-            factory = { ctx ->
-                Configuration.getInstance().apply {
-                    osmdroidBasePath = File(ctx.cacheDir, "osmdroid")
-                    osmdroidTileCache = File(ctx.cacheDir, "osmdroid/tiles")
-                    userAgentValue = ctx.packageName
-                }
-                MapView(ctx).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
-                    setMultiTouchControls(true)
-                    zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-                    setTilesScaledToDpi(true)
-                    controller.setZoom(17.5)
-                }.also { mapRef = it }
-            },
-            update = { map -> rebuildOverlays(map, points, useAmap) },
-            modifier = Modifier.fillMaxSize().weight(1f).padding(top = 8.dp),
-        )
+        // ---- 地图（严格限制在剩余空间内，不越界） ----
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .clipToBounds(),
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    Configuration.getInstance().apply {
+                        osmdroidBasePath = File(ctx.cacheDir, "osmdroid")
+                        osmdroidTileCache = File(ctx.cacheDir, "osmdroid/tiles")
+                        userAgentValue = ctx.packageName
+                    }
+                    MapView(ctx).apply {
+                        setTileSource(amapTileSource())
+                        setMultiTouchControls(true)
+                        zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                        controller.setZoom(16.0)
+                    }.also { mapRef = it }
+                },
+                update = { map -> rebuildOverlays(map, points, useAmap) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 
     // 首次有定位点时居中
