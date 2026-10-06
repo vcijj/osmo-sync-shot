@@ -62,6 +62,7 @@ fun ShootScreen(modifier: Modifier = Modifier) {
     var phoneCapture by remember { mutableStateOf(true) }
     var switchPhotoFirst by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    var exportResult by remember { mutableStateOf<String?>(null) }
 
     val running = state is ShooterState.Running
     val cfg = ShootConfig(
@@ -226,7 +227,13 @@ fun ShootScreen(modifier: Modifier = Modifier) {
 
         // ---- 拍摄记录 ----
         item {
-            Text("拍摄记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("拍摄记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = { exportResult = com.osmosync.app.util.LogExport.export(app, logs) }) {
+                    Text("导出清单")
+                }
+            }
+            exportResult?.let { Text(it, fontSize = 12.sp, color = Color(0xFF1B873B)) }
         }
         val reversed = logs.asReversed()
         items(reversed, key = { "${it.index}-${it.timeMs}" }) { log ->

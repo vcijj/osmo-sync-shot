@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GroupWork
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -142,6 +143,7 @@ private fun requiredPermissions(): Array<String> {
     if (Build.VERSION.SDK_INT >= 31) {
         list += Manifest.permission.BLUETOOTH_CONNECT
         list += Manifest.permission.BLUETOOTH_SCAN
+        list += Manifest.permission.BLUETOOTH_ADVERTISE
     } else {
         list += Manifest.permission.ACCESS_FINE_LOCATION
     }
@@ -176,12 +178,19 @@ fun MainTabs() {
                     icon = { Icon(Icons.Filled.Timer, contentDescription = null) },
                     label = { Text("定时连拍") },
                 )
+                NavigationBarItem(
+                    selected = tab == 2,
+                    onClick = { tab = 2 },
+                    icon = { Icon(Icons.Filled.GroupWork, contentDescription = null) },
+                    label = { Text("协同") },
+                )
             }
         },
     ) { padding ->
         when (tab) {
             0 -> DevicesScreen(Modifier.padding(padding))
-            else -> ShootScreen(Modifier.padding(padding))
+            1 -> ShootScreen(Modifier.padding(padding))
+            else -> MeshScreen(Modifier.padding(padding))
         }
     }
 }

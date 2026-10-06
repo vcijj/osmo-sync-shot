@@ -417,6 +417,19 @@ class OsmoCamera(
         val r = sendCommand(Dji.CMD_SET_CAMERA, Dji.CMD_RECORD_CONTROL, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.recordControl(identity.deviceId, start))
         return r != null
     }
+
+    /** 让相机进入休眠（0x001A，power_mode=3） */
+    suspend fun sleepCamera(): Boolean {
+        val r = sendCommand(Dji.CMD_SET_GENERAL, Dji.CMD_POWER_MODE, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.powerMode(Dji.POWER_SLEEP))
+        if (r != null) patchUi { it.copy(errorMsg = null) }
+        return r != null
+    }
+
+    /** 恢复正常电源模式（0x001A，power_mode=0），用于唤醒后解除休眠状态 */
+    suspend fun wakeCamera(): Boolean {
+        val r = sendCommand(Dji.CMD_SET_GENERAL, Dji.CMD_POWER_MODE, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.powerMode(Dji.POWER_NORMAL))
+        return r != null
+    }
 }
 
 /**

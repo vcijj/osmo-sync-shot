@@ -13,6 +13,8 @@ object Dji {
     const val CMD_CONNECT = 0x19
     // 按键上报 0x0011
     const val CMD_KEY_REPORT = 0x11
+    // 相机电源模式设置 0x001A
+    const val CMD_POWER_MODE = 0x1A
     // 版本查询 0x0000
     const val CMD_VERSION = 0x00
     // 拍录控制 0x1D03
@@ -224,6 +226,11 @@ object Dji {
         p[4] = (if (start) 0 else 1).toByte()
         return p
     }
+
+    // ---------- 相机电源模式设置（0x001A） ----------
+
+    /** payload 单字节：0=正常模式，3=休眠模式 */
+    fun powerMode(mode: Int): ByteArray = byteArrayOf(mode.toByte())
 
     // ---------- 相机状态订阅（0x1D05） ----------
 

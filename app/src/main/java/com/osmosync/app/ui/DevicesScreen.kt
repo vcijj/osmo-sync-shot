@@ -58,7 +58,19 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
 
         // ---- 已连接相机 ----
         item {
-            Text("我的相机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("我的相机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = {
+                    scope.launch {
+                        val macs = app.cameraManager.cameras.value.map { it.mac }
+                        val n = com.osmosync.app.ble.WakeAdvertiser.wake(app, macs)
+                        app.cameraManager.postMessage(
+                            if (n < 0) "本机不支持蓝牙广播，无法唤醒"
+                            else "已向 $n 台相机发送唤醒广播，稍等几秒后重连",
+                        )
+                    }
+                }) { Text("唤醒休眠") }
+            }
         }
         if (cameras.isEmpty()) {
             item {
@@ -113,11 +125,11 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                         OutlinedButton(onClick = { scope.launch { cam.recordControl(false) } }, enabled = ui.state == LinkState.CONNECTED) {
                             Text("停止录像")
                         }
+                        OutlinedButton(onClick = { scope.launch { cam.sleepCamera() } }, enabled = ui.state == LinkState.CONNECTED) {
+                            Text("睡眠")
+                        }
                         OutlinedButton(onClick = { app.cameraManager.disconnect(cam.mac) }) {
                             Text("断开")
-                        }
-                        OutlinedButton(onClick = { app.cameraManager.forget(cam.mac) }) {
-                            Text("移除")
                         }
                     }
                 }

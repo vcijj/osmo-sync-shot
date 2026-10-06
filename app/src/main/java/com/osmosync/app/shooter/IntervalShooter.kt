@@ -87,53 +87,71 @@ class IntervalShooter(
         return start
     }
 
-    fun start(config: ShootConfig) {
+    /**
+     * @param startAtOverride 绝对开始时刻（多机协同/从机模式使用），为空则按 config 计算
+     * @param onShot 每次触发完成后的回调（协同从机用它向主机上报）
+     * @param onEnd 会话结束（完成或被停止）时回调一次
+     */
+    fun start(
+        config: ShootConfig,
+        startAtOverride: Long? = null,
+        onShot: ((ShotLogEntry) -> Unit)? = null,
+        onEnd: (() -> Unit)? = null,
+    ) {
         if (isRunning) return
-        val startAt = computeStartAt(config) ?: return
+        val startAt = (startAtOverride ?: computeStartAt(config))
+            ?: return
         _logs.value = emptyList()
+        val endOnce = onEnd
         job = scope.launch {
-            // 可选：先统一切到拍照模式
-            if (config.switchToPhotoFirst) {
-                cameraManager.switchAllToPhoto()
-                delay(800)
-            }
-            val running = ShooterState.Running(
-                config = config,
-                startedAtMs = System.currentTimeMillis(),
-                actualStartAtMs = startAt,
-                currentShot = 0,
-                totalShots = config.totalShots,
-                nextShotAtMs = startAt,
-            )
-            _state.value = running
+            try {
+                // 可选：先统一切到拍照模式
+                if (config.switchToPhotoFirst) {
+                    cameraManager.switchAllToPhoto()
+                    delay(800)
+                }
+                val running = ShooterState.Running(
+                    config = config,
+                    startedAtMs = System.currentTimeMillis(),
+                    actualStartAtMs = startAt,
+                    currentShot = 0,
+                    totalShots = config.totalShots,
+                    nextShotAtMs = startAt,
+                )
+                _state.value = running
 
-            // 等待开始时刻
-            while (isActive && System.currentTimeMillis() < startAt) {
-                _state.value = running.copy(nextShotAtMs = startAt)
-                delay(200)
-            }
+                // 等待开始时刻
+                while (isActive && System.currentTimeMillis() < startAt) {
+                    _state.value = running.copy(nextShotAtMs = startAt)
+                    delay(200)
+                }
 
-            var i = 0
-            val intervalMs = (config.intervalSeconds * 1000).toLong().coerceAtLeast(200)
-            while (isActive && (config.totalShots == 0 || i < config.totalShots)) {
-                if (i > 0) {
-                    val next = System.currentTimeMillis() + intervalMs
-                    _state.value = _state.value.let { s ->
-                        if (s is ShooterState.Running) s.copy(nextShotAtMs = next) else s
+                var i = 0
+                val intervalMs = (config.intervalSeconds * 1000).toLong().coerceAtLeast(200)
+                while (isActive && (config.totalShots == 0 || i < config.totalShots)) {
+                    if (i > 0) {
+                        val next = System.currentTimeMillis() + intervalMs
+                        _state.value = _state.value.let { s ->
+                            if (s is ShooterState.Running) s.copy(nextShotAtMs = next) else s
+                        }
+                        delay(intervalMs)
                     }
-                    delay(intervalMs)
+                    i++
+                    _state.value = _state.value.let { s ->
+                        if (s is ShooterState.Running) s.copy(currentShot = i) else s
+                    }
+                    val entry = fireOnce(i, config)
+                    onShot?.invoke(entry)
                 }
-                i++
-                _state.value = _state.value.let { s ->
-                    if (s is ShooterState.Running) s.copy(currentShot = i) else s
-                }
-                fireOnce(i, config)
+            } finally {
+                job = null
+                _state.value = ShooterState.Idle
+                endOnce?.invoke()
             }
-            stop()
         }
     }
 
-    suspend fun fireOnce(index: Int, config: ShootConfig) {
+    suspend fun fireOnce(index: Int, config: ShootConfig): ShotLogEntry {
         val t0 = System.currentTimeMillis()
         // 先群发相机快门（BLE 写入毫秒级），再触发手机拍照
         val camResults = withContext(Dispatchers.IO) { cameraManager.shutterAll() }
@@ -156,6 +174,7 @@ class IntervalShooter(
             phoneDetail = phoneDetail,
         )
         _logs.value = (_logs.value + entry).takeLast(200)
+        return entry
     }
 
     fun stop() {

@@ -64,6 +64,11 @@ class CameraManager(private val context: Context, val identity: RemoteIdentity) 
     private val _scanError = MutableStateFlow<String?>(null)
     val scanError: StateFlow<String?> = _scanError
 
+    /** 在设备页顶部显示一条提示（也用于唤醒/操作结果提示） */
+    fun postMessage(msg: String?) {
+        _scanError.value = msg
+    }
+
     private val _cameras = MutableStateFlow<List<OsmoCamera>>(emptyList())
     val cameras: StateFlow<List<OsmoCamera>> = _cameras
 
