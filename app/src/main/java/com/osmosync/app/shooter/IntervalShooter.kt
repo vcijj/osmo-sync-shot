@@ -1,5 +1,6 @@
 package com.osmosync.app.shooter
 
+import android.net.Uri
 import com.osmosync.app.ble.CameraManager
 import com.osmosync.app.ble.ShotResult
 import com.osmosync.app.phone.PhoneCameraController
@@ -33,6 +34,7 @@ data class ShotLogEntry(
     val cameraResults: List<ShotResult>,
     val phoneSaved: Boolean,
     val phoneDetail: String,
+    val phoneUri: String? = null,   // 手机照片的 content:// Uri，用于系统分享（互传/快传等）
 )
 
 sealed class ShooterState {
@@ -157,10 +159,12 @@ class IntervalShooter(
         val camResults = withContext(Dispatchers.IO) { cameraManager.shutterAll() }
         var phoneSaved = false
         var phoneDetail = "未启用"
+        var phoneUri: String? = null
         if (config.phoneCapture) {
             try {
-                phone.takePhoto()
+                val uri = phone.takePhoto()
                 phoneSaved = true
+                phoneUri = if (uri != Uri.EMPTY) uri.toString() else null
                 phoneDetail = "已保存到 DCIM/OsmoSync"
             } catch (e: Exception) {
                 phoneDetail = "手机拍照失败: ${e.message ?: e.javaClass.simpleName}"
@@ -172,6 +176,7 @@ class IntervalShooter(
             cameraResults = camResults,
             phoneSaved = phoneSaved,
             phoneDetail = phoneDetail,
+            phoneUri = phoneUri,
         )
         _logs.value = (_logs.value + entry).takeLast(200)
         return entry

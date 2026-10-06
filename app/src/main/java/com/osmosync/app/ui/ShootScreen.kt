@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +51,7 @@ import java.util.Locale
 @Composable
 fun ShootScreen(modifier: Modifier = Modifier) {
     val app = App.instance
+    val context = LocalContext.current
     val shooter = app.shooter
     val state by shooter.state.collectAsState()
     val logs by shooter.logs.collectAsState()
@@ -229,6 +232,7 @@ fun ShootScreen(modifier: Modifier = Modifier) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("拍摄记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                TextButton(onClick = { shareAll(context, logs) }) { Text("分享全部") }
                 OutlinedButton(onClick = { exportResult = com.osmosync.app.util.LogExport.export(app, logs) }) {
                     Text("导出清单")
                 }
@@ -270,9 +274,46 @@ fun ShootScreen(modifier: Modifier = Modifier) {
                     if (!log.phoneSaved && log.phoneDetail != "未启用") {
                         Text(log.phoneDetail, fontSize = 12.sp, color = Color(0xFFB3261E))
                     }
+                    log.phoneUri?.let { uri ->
+                        TextButton(onClick = { shareOne(context, uri) }) {
+                            Text("分享（可选互传/快传）", fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
     }
+}
+
+/** 通过系统分享面板分享单张手机照片——在小米/OPPO/vivo 等机型上可选择"互传"直传联盟设备 */
+private fun shareOne(context: android.content.Context, uri: String) {
+    try {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "image/jpeg"
+            putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(uri))
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = android.content.Intent.createChooser(send, "分享照片").apply {
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(chooser)
+    } catch (_: Exception) {}
+}
+
+/** 批量分享本次会话全部手机照片 */
+private fun shareAll(context: android.content.Context, logs: List<com.osmosync.app.shooter.ShotLogEntry>) {
+    val uris = ArrayList(logs.mapNotNull { it.phoneUri?.let { u -> android.net.Uri.parse(u) } })
+    if (uris.isEmpty()) return
+    try {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "image/jpeg"
+            putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, uris)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = android.content.Intent.createChooser(send, "分享 ${uris.size} 张照片").apply {
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(chooser)
+    } catch (_: Exception) {}
 }
