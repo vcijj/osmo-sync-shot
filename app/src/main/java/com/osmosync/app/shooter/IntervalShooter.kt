@@ -56,6 +56,9 @@ sealed class ShooterState {
 class IntervalShooter(
     private val cameraManager: CameraManager,
     private val phone: PhoneCameraController,
+    private val gps: com.osmosync.app.gps.GpsProvider? = null,
+    private val orientation: com.osmosync.app.gps.OrientationProvider? = null,
+    private val trackStore: com.osmosync.app.track.TrackStore? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
@@ -179,6 +182,22 @@ class IntervalShooter(
             phoneUri = phoneUri,
         )
         _logs.value = (_logs.value + entry).takeLast(200)
+        // 轨迹：拍摄点带朝向与照片
+        val fix = gps?.fix?.value
+        if (fix != null && trackStore != null) {
+            trackStore.add(
+                com.osmosync.app.track.TrackPoint(
+                    timeMs = t0,
+                    lat = fix.latitude,
+                    lon = fix.longitude,
+                    headingDeg = orientation?.azimuth?.value,
+                    altitudeM = fix.altitudeM,
+                    isShot = true,
+                    shotIndex = index,
+                    photoUri = phoneUri,
+                ),
+            )
+        }
         return entry
     }
 

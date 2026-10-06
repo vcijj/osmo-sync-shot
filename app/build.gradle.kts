@@ -12,8 +12,8 @@ android {
         applicationId = "com.osmosync.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
     }
 
     buildTypes {
@@ -56,4 +56,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$camerax")
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
+
+    // 轨迹地图（开源，免 API Key）
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 }

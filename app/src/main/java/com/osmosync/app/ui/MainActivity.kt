@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GroupWork
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -184,13 +185,20 @@ fun MainTabs() {
                     icon = { Icon(Icons.Filled.GroupWork, contentDescription = null) },
                     label = { Text("协同") },
                 )
+                NavigationBarItem(
+                    selected = tab == 3,
+                    onClick = { tab = 3 },
+                    icon = { Icon(Icons.Filled.Place, contentDescription = null) },
+                    label = { Text("轨迹") },
+                )
             }
         },
     ) { padding ->
         when (tab) {
             0 -> DevicesScreen(Modifier.padding(padding))
             1 -> ShootScreen(Modifier.padding(padding))
-            else -> MeshScreen(Modifier.padding(padding))
+            2 -> MeshScreen(Modifier.padding(padding))
+            else -> TrackScreen(Modifier.padding(padding))
         }
     }
 }
