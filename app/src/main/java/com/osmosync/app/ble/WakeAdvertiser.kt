@@ -39,50 +39,82 @@ object WakeAdvertiser {
     }
 
     /**
-     * 依次对每台相机广播唤醒包（广播一次约 [perCameraMs] 毫秒）。
-     * @return 实际尝试唤醒的相机数量；不支持广播时返回 -1
+     * 依次对每台相机广播唤醒包。
+     * 安卓广播间隔较慢（LOW_LATENCY≈100ms，ESP 为 20-60ms），而休眠相机用
+     * 低功耗占空比扫描，容易错过，因此每台相机重复 [rounds] 轮、每轮 [perCameraMs] 毫秒。
+     *
+     * 注意必须使用**可连接广播**（setConnectable(true)），与官方 Demo 的
+     * ADV_TYPE_IND 一致；休眠相机会过滤不可连接广播。
+     *
+     * @return 成功广播的相机数量（失败原因见 lastErrorCode，0 表示无错误）
      */
-    suspend fun wake(context: Context, macs: List<String>, perCameraMs: Long = 2500): Int {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return -1
-        val advertiser = adapter.bluetoothLeAdvertiser ?: return -1
-        var count = 0
-        for (mac in macs) {
-            val payload = wakePayload(mac) ?: continue
-            advertiseOnce(advertiser, payload, perCameraMs)
-            count++
+    suspend fun wake(
+        context: Context,
+        macs: List<String>,
+        perCameraMs: Long = 3000,
+        rounds: Int = 3,
+        onProgress: ((Int, Int) -> Unit)? = null,
+    ): WakeResult {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+            ?: return WakeResult(0, macs.size, -100)
+        val advertiser = adapter.bluetoothLeAdvertiser
+            ?: return WakeResult(0, macs.size, -101)
+        var okCount = 0
+        var failCount = 0
+        var lastErrorCode = 0
+        macs.forEachIndexed { index, mac ->
+            val payload = wakePayload(mac)
+            if (payload == null) {
+                failCount++
+                return@forEachIndexed
+            }
+            var anyOk = false
+            repeat(rounds) {
+                val err = advertiseOnce(advertiser, payload, perCameraMs)
+                if (err == 0) anyOk = true else lastErrorCode = err
+            }
+            if (anyOk) okCount++ else failCount++
+            onProgress?.invoke(index + 1, macs.size)
         }
-        return count
+        return WakeResult(okCount, failCount, lastErrorCode)
     }
 
+    data class WakeResult(val okCount: Int, val failCount: Int, val lastErrorCode: Int)
+
+    /** @return 0=广播正常发送；否则为 AdvertiseCallback 错误码或 -1（异常） */
     private suspend fun advertiseOnce(
         advertiser: android.bluetooth.le.BluetoothLeAdvertiser,
         payload: ByteArray,
         durationMs: Long,
-    ) {
+    ): Int {
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
-            .setConnectable(false)
+            .setConnectable(true) // 官方 Demo 为 ADV_TYPE_IND（可连接广播），不可连接广播会被休眠相机过滤
             .build()
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
             .setIncludeTxPowerLevel(false)
             .addManufacturerData(WAKE_COMPANY_ID, payload)
             .build()
-        val done = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val failureCode = java.util.concurrent.atomic.AtomicInteger(0)
         val callback = object : AdvertiseCallback() {
-            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { /* 保持广播 */ }
-            override fun onStartFailure(errorCode: Int) { done.complete(Unit) }
+            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { /* 持续广播到时长结束 */ }
+            override fun onStartFailure(code: Int) {
+                failureCode.compareAndSet(0, code)
+            }
         }
         try {
             advertiser.startAdvertising(settings, data, callback)
+        } catch (_: SecurityException) {
+            return -102
         } catch (_: Exception) {
-            return
+            return -1
         }
         delay(durationMs)
         try { advertiser.stopAdvertising(callback) } catch (_: Exception) {}
-        done.complete(Unit)
         // 广播间隔稍作停顿，避免连续开关广播被系统限流
         delay(300)
+        return failureCode.get()
     }
 }

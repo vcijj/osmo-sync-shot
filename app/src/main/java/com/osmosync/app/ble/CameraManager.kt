@@ -285,14 +285,21 @@ class CameraManager(
         }
         scope.launch {
             try {
-                val n = WakeAdvertiser.wake(context, macs)
-                postMessage(
-                    if (n < 0) "本机不支持蓝牙广播，无法唤醒"
-                    else "已向 $n 台相机发送唤醒广播，稍后自动重连...",
-                )
-                if (n > 0) {
-                    delay(4000) // 等相机完成开机
-                    _cameras.value.filter { it.ui.value.state == LinkState.DISCONNECTED }.forEach { it.connect() }
+                postMessage("唤醒广播中（0/${macs.size}）...需相机处于休眠而非关机状态")
+                val r = WakeAdvertiser.wake(context, macs) { i, n ->
+                    postMessage("唤醒广播中（$i/$n）...")
+                }
+                when {
+                    r.okCount == 0 && r.failCount > 0 ->
+                        postMessage("广播启动失败（错误码 ${r.lastErrorCode}），请开关一次手机蓝牙后重试")
+                    r.okCount == 0 ->
+                        postMessage("没有可唤醒的相机")
+                    else -> {
+                        postMessage("唤醒广播已发送，等待相机开机（约 10 秒）后自动重连...")
+                        delay(8000) // 等相机完成开机
+                        _cameras.value.filter { it.ui.value.state == LinkState.DISCONNECTED }.forEach { it.connect() }
+                        postMessage("已尝试重连，若未成功请等几秒后手动点\"连接\"")
+                    }
                 }
             } finally {
                 waking = false
