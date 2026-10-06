@@ -6,6 +6,7 @@ import com.osmosync.app.ble.CameraManager
 import com.osmosync.app.ble.RemoteIdentity
 import com.osmosync.app.gps.GpsProvider
 import com.osmosync.app.gps.OrientationProvider
+import com.osmosync.app.insta360.Insta360Remote
 import com.osmosync.app.mesh.MeshManager
 import com.osmosync.app.phone.PhoneCameraController
 import com.osmosync.app.shooter.IntervalShooter
@@ -21,6 +22,7 @@ class App : Application() {
     lateinit var gps: GpsProvider
     lateinit var orientation: OrientationProvider
     lateinit var trackStore: TrackStore
+    lateinit var insta360: Insta360Remote
     lateinit var mesh: MeshManager
         private set
 
@@ -38,6 +40,7 @@ class App : Application() {
         shooter = IntervalShooter(cameraManager, phone, gps, orientation, trackStore)
         MeshManager.initContext(this)
         mesh = MeshManager(cameraManager, shooter)
+        insta360 = Insta360Remote(this)
     }
 
     companion object {

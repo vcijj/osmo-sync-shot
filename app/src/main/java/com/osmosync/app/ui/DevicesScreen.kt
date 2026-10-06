@@ -143,6 +143,9 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
         // ---- GPS 注入 ----
         item { GpsCard() }
 
+        // ---- Insta360 遥控模式 ----
+        item { Insta360Card() }
+
         // ---- 扫描 ----
         item {
             Spacer(Modifier.height(8.dp))
@@ -210,6 +213,51 @@ private fun GpsCard() {
                 }
                 Switch(checked = pushing, onCheckedChange = { on -> app.cameraManager.setGpsPush(on) })
             }
+        }
+    }
+}
+
+@Composable
+private fun Insta360Card() {
+    val app = App.instance
+    val enabled by app.insta360.enabled.collectAsState()
+    val cams by app.insta360.cams.collectAsState()
+    val status by app.insta360.status.collectAsState()
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Insta360 遥控模式", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (enabled) "正以 \"Insta360 GPS Remote\" 对外广播，等待相机接入"
+                        else "把手机模拟成影石 GPS 遥控器（影石相机主动连手机）",
+                        fontSize = 12.sp, color = if (enabled) Color(0xFF1B873B) else Color.Gray,
+                    )
+                }
+                Switch(checked = enabled, onCheckedChange = { on -> if (on) app.insta360.start() else app.insta360.stop() })
+            }
+            if (status.isNotBlank()) {
+                Text(status, fontSize = 12.sp, color = if (cams.isEmpty()) Color.Gray else Color(0xFF1B873B))
+            }
+            cams.forEach { cam ->
+                Text(
+                    "${cam.name} · ${cam.mac} · ${if (cam.subscribed) "可遥控" else "接入中..."}",
+                    fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (cams.any { it.subscribed }) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = { app.insta360.shutter() }) { Text("快门") }
+                    OutlinedButton(onClick = { app.insta360.switchMode() }) { Text("切模式") }
+                    OutlinedButton(onClick = { app.insta360.toggleScreen() }) { Text("息屏") }
+                    OutlinedButton(onClick = { app.insta360.powerOff() }) { Text("关机") }
+                }
+            }
+            Text(
+                "使用：开启本开关后，在相机 设置→蓝牙/遥控器连接 里选择 \"Insta360 GPS Remote\"。支持 X3/ONE RS 等兼容 GPS 遥控器的机型；相机需开机（不支持唤醒关机）",
+                fontSize = 11.sp, color = Color.Gray,
+            )
         }
     }
 }

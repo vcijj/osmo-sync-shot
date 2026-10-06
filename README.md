@@ -1,6 +1,6 @@
 # 大疆运动相机同步连拍（安卓遥控器）
 
-用一台安卓手机通过蓝牙**同时控制多台大疆运动相机**（Osmo Action 系列 / Osmo 360）：
+用一台安卓手机通过蓝牙遥控**大疆 Osmo Action 系列 / Osmo 360** 和 **影石 Insta360** 运动相机：
 
 - **多机批量控制**：一台手机同时连接多台相机，统一群发快门，支持单机微调
 - **定时连拍**：设定间隔（最小 0.5 秒）与张数，支持倒计时开始和指定时刻（HH:mm）自动开始
@@ -24,6 +24,8 @@
 | Osmo 360 | ✅ |
 | Osmo Action 3 | 理论可用（社区反馈可用，未实测） |
 | Osmo Action 1 / 2 | ❌（无此蓝牙协议，仅 WiFi，未实现） |
+| Insta360 X3 / ONE RS | ✅（GPS 遥控器模拟，快门/切模式/息屏/关机） |
+| Insta360 X4 / X5 / Ace 系列 | 理论可用（支持 GPS 遥控器的机型，社区协议未实测） |
 
 ## 使用步骤
 
@@ -35,6 +37,7 @@
 6. **定时连拍**：切到"定时连拍"页 → 设置间隔 / 张数 / 开始时间 → 点"开始定时连拍"。屏幕上可以看到手机同步画面，每次触发的结果会记录在"拍摄记录"里。
 7. **多手机协同**（可选）：每台手机先各自连好自己的相机。选一台做主机（"协同"页 → 主机，提前在系统设置开好热点），其余切到"从机"自动发现并接入；从机列表出现后，主机设好参数点"开始协同连拍"——所有手机按校准后的时钟同步开拍。从机也可手动填主机 IP 连接。
 8. **GPS 注入**（可选）：在"相机管理"页打开"GPS 注入到相机照片"开关，手机定位会按 1Hz 推送给所有已连接相机（官方 GPS 遥控器同款指令），相机拍摄的照片随之记录 GPS；手机自己拍的照片也会写入 GPS EXIF。户外空旷处信号最佳。
+9. **Insta360 遥控模式**（可选）：影石相机与大疆架构相反——相机是蓝牙主设备，会主动连接遥控器。打开"Insta360 遥控模式"开关后，手机以 "Insta360 GPS Remote" 名义对外广播（GATT 服务 0xCE80），在相机的 设置→蓝牙/遥控器连接 菜单里选择该设备即可接入；接入后可对相机快门（拍照模式下拍照/视频模式开始停止录像）、切模式、息屏、关机，支持多台相机同时接入。
 
 ## 关于照片回传
 
@@ -72,7 +75,9 @@ ui/          Compose 界面
 
 ## 协议来源与致谢
 
-蓝牙控制协议来自大疆官方开源项目 [Osmo-GPS-Controller-Demo](https://github.com/dji-sdk/Osmo-GPS-Controller-Demo)（DJI R SDK 协议，MIT），本项目的帧封装已用官方文档给出的已知好帧做过字节级验证。多机握手细节参考了社区项目 [rhoenschrat/DJI-Remote](https://github.com/rhoenschrat/DJI-Remote) 与 [datagutt/node-osmo](https://github.com/datagutt/node-osmo)。
+**大疆**：蓝牙控制协议来自官方开源项目 [Osmo-GPS-Controller-Demo](https://github.com/dji-sdk/Osmo-GPS-Controller-Demo)（DJI R SDK 协议，MIT），本项目的帧封装已用官方文档给出的已知好帧做过字节级验证。多机握手细节参考了社区项目 [rhoenschrat/DJI-Remote](https://github.com/rhoenschrat/DJI-Remote) 与 [datagutt/node-osmo](https://github.com/datagutt/node-osmo)。
+
+**影石 Insta360**：GPS 遥控器协议来自社区逆向工程 [pchwalek/insta360_ble_esp32](https://github.com/pchwalek/insta360_ble_esp32)（X3/ONE RS 实测：服务 0xCE80、指令帧 FC EF FE 86 00 03 01 [键位][事件]）、[TheAngryRaven/insta360-ble-gps-spec](https://github.com/TheAngryRaven/insta360-ble-gps-spec)（X4 唤醒与 GPS 遥控协议）与 [Insta360 X3 BLE remote (Hackaday)](https://hackaday.io/project/188975-insta360-x3-ble-remote-control-with-esp32)。
 
 关键协议要素：服务 `0xFFF0`，写特征 `0xFFF5`，通知特征 `0xFFF4`；广播识别=厂商字段第 0/1/4 字节为 `0xAA/0x08/0xFA`；连接握手（0x0019）→ 按键上报（0x0011）触发快门 → 模式切换（0x1D04）→ 状态订阅（0x1D05）。
 
