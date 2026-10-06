@@ -112,6 +112,11 @@ class OsmoCamera(
         patchUi { it.copy(cameraIndex = i) }
     }
 
+    /** 恢复历史记录中的型号名（App 重启后记忆的相机） */
+    fun setRemembered(model: String) {
+        if (model.isNotBlank()) patchUi { it.copy(model = model) }
+    }
+
     // ---------------- 连接 ----------------
 
     fun connect() {

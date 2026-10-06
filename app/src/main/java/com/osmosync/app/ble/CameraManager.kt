@@ -79,6 +79,36 @@ class CameraManager(
     val cameras: StateFlow<List<OsmoCamera>> = _cameras
 
     private val foundMap = LinkedHashMap<String, DeviceHit>()
+    private val prefs = context.getSharedPreferences("osmosync", Context.MODE_PRIVATE)
+
+    /** 共享的相机回调：握手成功后记录配对、编号并持久化相机信息 */
+    private val cameraListener = object : OsmoCamera.Listener {
+        override fun onHandshakeSucceeded(camera: OsmoCamera) {
+            identity.markPaired(camera.mac)
+            saveKnown(camera.mac, camera.ui.value.name, camera.ui.value.model)
+            scope.launch {
+                delay(100)
+                val connected = connectedCameras()
+                connected.forEachIndexed { i, c -> c.setIndex(if (connected.size == 1) 0 else i + 1) }
+            }
+        }
+
+        override fun onLinkLost(camera: OsmoCamera) {
+            // 已在相机内部处理重连/报错
+        }
+    }
+
+    init {
+        // 恢复之前连接过的相机（便于直接唤醒/重连，无需重新扫描）
+        val known = loadKnown()
+        if (known.isNotEmpty()) {
+            _cameras.value = known.map { (mac, info) ->
+                OsmoCamera(context, mac, info.first, identity, cameraListener).apply {
+                    setRemembered(info.second)
+                }
+            }
+        }
+    }
 
     fun hasPermission(): Boolean {
         val connectOk = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
@@ -190,20 +220,7 @@ class CameraManager(
             cameraByMac(hit.mac)?.connect()
             return
         }
-        val cam = OsmoCamera(context, hit.mac, hit.name.ifBlank { "DJI相机" }, identity, object : OsmoCamera.Listener {
-            override fun onHandshakeSucceeded(camera: OsmoCamera) {
-                identity.markPaired(camera.mac)
-                scope.launch {
-                    delay(100)
-                    val connected = connectedCameras()
-                    connected.forEachIndexed { i, c -> c.setIndex(if (connected.size == 1) 0 else i + 1) }
-                }
-            }
-
-            override fun onLinkLost(camera: OsmoCamera) {
-                // 已在相机内部处理重连/报错
-            }
-        })
+        val cam = OsmoCamera(context, hit.mac, hit.name.ifBlank { "DJI相机" }, identity, cameraListener)
         _cameras.value = _cameras.value + cam
         cam.connect()
     }
@@ -219,6 +236,68 @@ class CameraManager(
     fun forget(mac: String) {
         disconnect(mac)
         _cameras.value = _cameras.value.filterNot { it.mac == mac }
+        removeKnown(mac)
+    }
+
+    // ---------------- 已连接相机记忆（持久化） ----------------
+
+    private fun loadKnown(): List<Pair<String, Pair<String, String>>> = try {
+        val o = org.json.JSONObject(prefs.getString("known_cameras", "{}") ?: "{}")
+        o.keys().asSequence().map { mac ->
+            val info = o.getJSONObject(mac)
+            mac to (info.optString("n") to info.optString("m"))
+        }.toList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    private fun saveKnown(mac: String, name: String, model: String) {
+        try {
+            val o = org.json.JSONObject(prefs.getString("known_cameras", "{}") ?: "{}")
+            val info = org.json.JSONObject()
+                .put("n", name)
+                .put("m", model)
+                .put("t", System.currentTimeMillis())
+            o.put(mac, info)
+            prefs.edit().putString("known_cameras", o.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    private fun removeKnown(mac: String) {
+        try {
+            val o = org.json.JSONObject(prefs.getString("known_cameras", "{}") ?: "{}")
+            o.remove(mac)
+            prefs.edit().putString("known_cameras", o.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    /** 唤醒所有已知相机并自动尝试重连（唤醒广播完成后延迟几秒） */
+    @Volatile private var waking = false
+
+    fun wakeAndReconnect() {
+        if (waking) return
+        waking = true
+        val macs = _cameras.value.map { it.mac }
+        if (macs.isEmpty()) {
+            postMessage("还没有已知的相机，请先扫描连接一次")
+            waking = false
+            return
+        }
+        scope.launch {
+            try {
+                val n = WakeAdvertiser.wake(context, macs)
+                postMessage(
+                    if (n < 0) "本机不支持蓝牙广播，无法唤醒"
+                    else "已向 $n 台相机发送唤醒广播，稍后自动重连...",
+                )
+                if (n > 0) {
+                    delay(4000) // 等相机完成开机
+                    _cameras.value.filter { it.ui.value.state == LinkState.DISCONNECTED }.forEach { it.connect() }
+                }
+            } finally {
+                waking = false
+            }
+        }
     }
 
     // ---------------- 批量指令 ----------------

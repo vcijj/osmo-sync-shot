@@ -60,16 +60,7 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("我的相机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = {
-                    scope.launch {
-                        val macs = app.cameraManager.cameras.value.map { it.mac }
-                        val n = com.osmosync.app.ble.WakeAdvertiser.wake(app, macs)
-                        app.cameraManager.postMessage(
-                            if (n < 0) "本机不支持蓝牙广播，无法唤醒"
-                            else "已向 $n 台相机发送唤醒广播，稍等几秒后重连",
-                        )
-                    }
-                }) { Text("唤醒休眠") }
+                OutlinedButton(onClick = { app.cameraManager.wakeAndReconnect() }) { Text("唤醒并重连") }
             }
         }
         if (cameras.isEmpty()) {
