@@ -406,6 +406,10 @@ class OsmoCamera(
     suspend fun takePhoto(): Boolean =
         writeBytes(DjiFrame.build(Dji.CMD_SET_GENERAL, Dji.CMD_KEY_REPORT, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.keyReportShutter(), nextSeq()))
 
+    /** GPS 数据推送（0x0017，无需应答），payload 由 GpsProvider 组装 */
+    suspend fun sendGps(payload: ByteArray): Boolean =
+        writeBytes(DjiFrame.build(Dji.CMD_SET_GENERAL, Dji.CMD_GPS_PUSH, DjiFrame.CMD_NO_RESPONSE, payload, nextSeq()))
+
     /** 切换相机模式 */
     suspend fun switchMode(mode: Int): Boolean {
         val r = sendCommand(Dji.CMD_SET_CAMERA, Dji.CMD_MODE_SWITCH, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.modeSwitch(identity.deviceId, mode))

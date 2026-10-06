@@ -136,6 +136,9 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        // ---- GPS 注入 ----
+        item { GpsCard() }
+
         // ---- 扫描 ----
         item {
             Spacer(Modifier.height(8.dp))
@@ -178,6 +181,32 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+private fun GpsCard() {
+    val app = App.instance
+    val pushing by app.cameraManager.gpsPushing.collectAsState()
+    val fix by app.gps.fix.collectAsState()
+    val status by app.gps.status.collectAsState()
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("GPS 注入到相机照片", fontWeight = FontWeight.Bold)
+                    Text(
+                        when {
+                            pushing && fix != null -> "推送中 · $status"
+                            pushing -> status.ifBlank { "等待定位..." }
+                            else -> "开启后手机定位按 1Hz 推给相机（写入照片元数据）"
+                        },
+                        fontSize = 12.sp, color = if (pushing && fix != null) Color(0xFF1B873B) else Color.Gray,
+                    )
+                }
+                Switch(checked = pushing, onCheckedChange = { on -> app.cameraManager.setGpsPush(on) })
+            }
+        }
     }
 }
 

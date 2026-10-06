@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import com.osmosync.app.ble.CameraManager
 import com.osmosync.app.ble.RemoteIdentity
+import com.osmosync.app.gps.GpsProvider
 import com.osmosync.app.mesh.MeshManager
 import com.osmosync.app.phone.PhoneCameraController
 import com.osmosync.app.shooter.IntervalShooter
@@ -15,6 +16,7 @@ class App : Application() {
     lateinit var cameraManager: CameraManager
     lateinit var phone: PhoneCameraController
     lateinit var shooter: IntervalShooter
+    lateinit var gps: GpsProvider
     lateinit var mesh: MeshManager
         private set
 
@@ -23,8 +25,10 @@ class App : Application() {
         instance = this
         CrashGuard.install(this)
         identity = RemoteIdentity(getSharedPreferences("osmosync", Context.MODE_PRIVATE))
-        cameraManager = CameraManager(this, identity)
+        gps = GpsProvider(this)
+        cameraManager = CameraManager(this, identity, gps)
         phone = PhoneCameraController(this)
+        phone.attachGps(gps)
         shooter = IntervalShooter(cameraManager, phone)
         MeshManager.initContext(this)
         mesh = MeshManager(cameraManager, shooter)

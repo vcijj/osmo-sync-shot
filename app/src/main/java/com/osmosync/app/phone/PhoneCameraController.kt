@@ -91,11 +91,17 @@ class PhoneCameraController(private val context: Context) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/OsmoSync")
             }
         }
-        val options = ImageCapture.OutputFileOptions.Builder(
+        var builder = ImageCapture.OutputFileOptions.Builder(
             context.contentResolver,
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             cv,
-        ).build()
+        )
+        // 有定位时写入 GPS EXIF
+        gps?.toLocation()?.let { loc ->
+            val metadata = ImageCapture.Metadata().apply { location = loc }
+            builder = builder.setMetadata(metadata)
+        }
+        val options = builder.build()
         suspendCancellableCoroutine { cont ->
             ic.takePicture(
                 options,
@@ -111,5 +117,13 @@ class PhoneCameraController(private val context: Context) {
                 },
             )
         }
+    }
+
+    /** 注入 GPS 提供者（可选；拍照时若有定位则写入 EXIF） */
+    @Volatile
+    var gps: com.osmosync.app.gps.GpsProvider? = null
+
+    fun attachGps(provider: com.osmosync.app.gps.GpsProvider) {
+        gps = provider
     }
 }

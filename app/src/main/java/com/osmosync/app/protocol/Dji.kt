@@ -13,6 +13,8 @@ object Dji {
     const val CMD_CONNECT = 0x19
     // 按键上报 0x0011
     const val CMD_KEY_REPORT = 0x11
+    // GPS 数据推送 0x0017
+    const val CMD_GPS_PUSH = 0x17
     // 相机电源模式设置 0x001A
     const val CMD_POWER_MODE = 0x1A
     // 版本查询 0x0000
@@ -231,6 +233,45 @@ object Dji {
 
     /** payload 单字节：0=正常模式，3=休眠模式 */
     fun powerMode(mode: Int): ByteArray = byteArrayOf(mode.toByte())
+
+    // ---------- GPS 数据推送（0x0017，48 字节 payload） ----------
+
+    /**
+     * @param ymd   year*10000+month*100+day（本地日期）
+     * @param hms   hour*10000+minute*100+second（官方 Demo 用 UTC+8，这里直接取本地时间）
+     * @param lonE7 经度 * 1e7
+     * @param latE7 纬度 * 1e7
+     * @param heightMm 高度 mm
+     * @param speedNorthCms 向北速度 cm/s
+     * @param speedEastCms  向东速度 cm/s
+     * @param speedDownCms  下降速度 cm/s
+     * @param vertAccMm 垂直精度 mm
+     * @param horizAccMm 水平精度 mm
+     * @param speedAccCms 速度精度 cm/s
+     * @param satellites 卫星数量
+     */
+    fun gpsPush(
+        ymd: Int, hms: Int,
+        lonE7: Int, latE7: Int, heightMm: Long,
+        speedNorthCms: Float, speedEastCms: Float, speedDownCms: Float,
+        vertAccMm: Long, horizAccMm: Long, speedAccCms: Long,
+        satellites: Long,
+    ): ByteArray {
+        val p = ByteArray(48)
+        putU32(p, 0, ymd.toLong() and 0xFFFFFFFFL)
+        putU32(p, 4, hms.toLong() and 0xFFFFFFFFL)
+        putU32(p, 8, lonE7.toLong() and 0xFFFFFFFFL)
+        putU32(p, 12, latE7.toLong() and 0xFFFFFFFFL)
+        putU32(p, 16, heightMm and 0xFFFFFFFFL)
+        putU32(p, 20, speedNorthCms.toBits().toLong() and 0xFFFFFFFFL)
+        putU32(p, 24, speedEastCms.toBits().toLong() and 0xFFFFFFFFL)
+        putU32(p, 28, speedDownCms.toBits().toLong() and 0xFFFFFFFFL)
+        putU32(p, 32, vertAccMm and 0xFFFFFFFFL)
+        putU32(p, 36, horizAccMm and 0xFFFFFFFFL)
+        putU32(p, 40, speedAccCms and 0xFFFFFFFFL)
+        putU32(p, 44, satellites and 0xFFFFFFFFL)
+        return p
+    }
 
     // ---------- 相机状态订阅（0x1D05） ----------
 

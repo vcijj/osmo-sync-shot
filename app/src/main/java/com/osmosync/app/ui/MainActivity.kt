@@ -144,9 +144,9 @@ private fun requiredPermissions(): Array<String> {
         list += Manifest.permission.BLUETOOTH_CONNECT
         list += Manifest.permission.BLUETOOTH_SCAN
         list += Manifest.permission.BLUETOOTH_ADVERTISE
-    } else {
-        list += Manifest.permission.ACCESS_FINE_LOCATION
     }
+    // 定位：Android 11 及以下扫描必需；所有版本上用于 GPS 注入
+    list += Manifest.permission.ACCESS_FINE_LOCATION
     list += Manifest.permission.CAMERA
     if (Build.VERSION.SDK_INT >= 33) {
         list += Manifest.permission.POST_NOTIFICATIONS

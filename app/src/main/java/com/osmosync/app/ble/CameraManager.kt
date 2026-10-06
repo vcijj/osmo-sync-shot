@@ -49,7 +49,11 @@ data class ShotResult(
  * Android 的 getManufacturerSpecificData() 不含 Company ID，因此重组后再比对。
  */
 @SuppressLint("MissingPermission")
-class CameraManager(private val context: Context, val identity: RemoteIdentity) {
+class CameraManager(
+    private val context: Context,
+    val identity: RemoteIdentity,
+    private val gps: com.osmosync.app.gps.GpsProvider,
+) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val adapter: BluetoothAdapter?
@@ -216,6 +220,63 @@ class CameraManager(private val context: Context, val identity: RemoteIdentity) 
     }
 
     // ---------------- 批量指令 ----------------
+
+    private var gpsJob: kotlinx.coroutines.Job? = null
+
+    private val _gpsPushing = MutableStateFlow(false)
+    val gpsPushing: StateFlow<Boolean> = _gpsPushing
+
+    /** 开关：把手机 GPS 按 1Hz 推给所有已连接相机（相机写入照片元数据） */
+    fun setGpsPush(enabled: Boolean) {
+        if (enabled) {
+            if (gpsJob != null) return
+            gps.start()
+            _gpsPushing.value = true
+            gpsJob = scope.launch {
+                while (true) {
+                    val fix = gps.fix.value
+                    if (fix != null) {
+                        val payload = buildGpsPayload(fix)
+                        connectedCameras().forEach { cam ->
+                            try { cam.sendGps(payload) } catch (_: Exception) {}
+                        }
+                    }
+                    delay(1000)
+                }
+            }
+        } else {
+            gpsJob?.cancel()
+            gpsJob = null
+            gps.stop()
+            _gpsPushing.value = false
+        }
+    }
+
+    private fun buildGpsPayload(f: com.osmosync.app.gps.GpsFix): ByteArray {
+        val cal = java.util.Calendar.getInstance()
+        val ymd = cal.get(java.util.Calendar.YEAR) * 10000 +
+                (cal.get(java.util.Calendar.MONTH) + 1) * 100 + cal.get(java.util.Calendar.DAY_OF_MONTH)
+        val hms = cal.get(java.util.Calendar.HOUR_OF_DAY) * 10000 +
+                cal.get(java.util.Calendar.MINUTE) * 100 + cal.get(java.util.Calendar.SECOND)
+        val bearingRad = Math.toRadians(f.bearingDeg.toDouble())
+        val speedCms = f.speedMS * 100f
+        val north = (speedCms * kotlin.math.cos(bearingRad)).toFloat()
+        val east = (speedCms * kotlin.math.sin(bearingRad)).toFloat()
+        return com.osmosync.app.protocol.Dji.gpsPush(
+            ymd = ymd,
+            hms = hms,
+            lonE7 = (f.longitude * 1e7).toInt(),
+            latE7 = (f.latitude * 1e7).toInt(),
+            heightMm = (f.altitudeM * 1000).toLong(),
+            speedNorthCms = north,
+            speedEastCms = east,
+            speedDownCms = 0f,
+            vertAccMm = (f.accuracyM * 1000).toLong().coerceAtLeast(1),
+            horizAccMm = (f.accuracyM * 1000).toLong().coerceAtLeast(1),
+            speedAccCms = (f.accuracyM * 100).toLong().coerceAtLeast(1),
+            satellites = f.satellites.toLong(),
+        )
+    }
 
     suspend fun shutterAll(): List<ShotResult> = coroutineScope {
         val cams = connectedCameras()
