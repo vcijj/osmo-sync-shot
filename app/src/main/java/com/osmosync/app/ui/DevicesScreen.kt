@@ -49,6 +49,7 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
     val scanError by app.cameraManager.scanError.collectAsState()
     val scope = rememberCoroutineScope()
     var showAll by remember { mutableStateOf(false) }
+    val connectedCount by app.cameraManager.connectedCount.collectAsState()
 
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 12.dp),
@@ -60,7 +61,13 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("我的相机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { app.cameraManager.wakeAndReconnect() }) { Text("唤醒并重连") }
+                OutlinedButton(
+                    onClick = { app.cameraManager.wakeAndReconnect() },
+                    enabled = connectedCount == 0,
+                ) { Text("唤醒并重连") }
+            }
+            if (connectedCount > 0) {
+                Text("有相机处于连接状态，无需唤醒", fontSize = 11.sp, color = Color.Gray)
             }
         }
         if (cameras.isEmpty()) {

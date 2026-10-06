@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import com.osmosync.app.protocol.Dji
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -21,6 +22,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /** 扫描到的一台蓝牙设备 */
@@ -49,6 +53,7 @@ data class ShotResult(
  * Android 的 getManufacturerSpecificData() 不含 Company ID，因此重组后再比对。
  */
 @SuppressLint("MissingPermission")
+@OptIn(ExperimentalCoroutinesApi::class)
 class CameraManager(
     private val context: Context,
     val identity: RemoteIdentity,
@@ -78,8 +83,21 @@ class CameraManager(
     private val _cameras = MutableStateFlow<List<OsmoCamera>>(emptyList())
     val cameras: StateFlow<List<OsmoCamera>> = _cameras
 
+    /** 已连接相机数量（响应式，供界面禁用唤醒按钮等） */
+    private val _connectedCount = MutableStateFlow(0)
+    val connectedCount: StateFlow<Int> = _connectedCount
+
     private val foundMap = LinkedHashMap<String, DeviceHit>()
     private val prefs = context.getSharedPreferences("osmosync", Context.MODE_PRIVATE)
+
+    init {
+        scope.launch {
+            _cameras.flatMapLatest { list ->
+                if (list.isEmpty()) flowOf(0)
+                else combine(list.map { it.ui }) { states -> states.count { it.state == LinkState.CONNECTED } }
+            }.collect { _connectedCount.value = it }
+        }
+    }
 
     /** 共享的相机回调：握手成功后记录配对、编号并持久化相机信息 */
     private val cameraListener = object : OsmoCamera.Listener {
@@ -276,6 +294,11 @@ class CameraManager(
 
     fun wakeAndReconnect() {
         if (waking) return
+        // 有相机已连接成功时禁用唤醒（避免多余的广播干扰现有连接）
+        if (_connectedCount.value > 0) {
+            postMessage("有相机处于连接状态，无需唤醒")
+            return
+        }
         waking = true
         val macs = _cameras.value.map { it.mac }
         if (macs.isEmpty()) {
