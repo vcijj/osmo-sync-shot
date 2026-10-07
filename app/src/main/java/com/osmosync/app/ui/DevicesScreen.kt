@@ -154,6 +154,10 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                             Text("移除")
                         }
                     }
+                    Text(
+                        "快照仅在相机在线时立即拍摄；离线的相机只会被唤醒，连接后不会自动拍照",
+                        fontSize = 10.sp, color = Color.LightGray,
+                    )
                 }
             }
         }
