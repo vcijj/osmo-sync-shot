@@ -127,9 +127,9 @@ class CameraManager(
     }
 
     /**
-     * 关机/休眠相机的快照（官方遥控器手势：关机时短按拍照）。
-     * 仅在点击时相机链路在线才发送快照键（0x03 短按，拍完自动休眠）；
-     * 链路不在线则只做广播唤醒并恢复连接，连接成功后不会自动发送拍摄信号。
+     * 关机/休眠相机的快照（官方 Q&A「唤醒后 snapshot 功能」流程）：
+     * 广播唤醒 → 相机唤醒时蓝牙短暂断开并自动重连 → 重连后上报快门单击 → 拍完自动休眠。
+     * 相机在线且未休眠时直接快门。
      */
     fun snapshotOff(mac: String) {
         val cam = cameraByMac(mac) ?: return
@@ -140,15 +140,28 @@ class CameraManager(
         waking = true
         scope.launch {
             try {
-                postMessage("快照流程：发送唤醒广播...")
-                WakeAdvertiser.wake(context, listOf(mac), perCameraMs = 3000, rounds = 2)
-                if (cam.ui.value.state == LinkState.CONNECTED) {
-                    val ok = cam.sendSnapshotKey()
-                    postMessage(if (ok) "快照已发送，相机拍完会自动休眠" else "快照指令未应答")
-                } else {
-                    postMessage("已发送唤醒广播；相机接入后如需拍照请点\"拍一张\"")
-                    cam.connect()
+                if (cam.ui.value.state == LinkState.CONNECTED && cam.ui.value.powerMode != Dji.POWER_SLEEP) {
+                    val ok = cam.takePhoto()
+                    postMessage(if (ok) "已拍摄" else "快门无应答")
+                    return@launch
                 }
+                postMessage("快照流程：发送唤醒广播...")
+                WakeAdvertiser.wake(context, listOf(mac), perCameraMs = 3000, rounds = 4)
+                postMessage("等待相机唤醒并重连（约 20 秒内）...")
+                var ok = false
+                for (attempt in 0 until 20) {
+                    delay(1000)
+                    val st = cam.ui.value
+                    if (st.state == LinkState.CONNECTED && st.powerMode != Dji.POWER_SLEEP) {
+                        delay(400)
+                        ok = cam.takePhoto()
+                        break
+                    }
+                }
+                postMessage(
+                    if (ok) "快照已拍摄，相机稍后会自动休眠"
+                    else "快照未完成：相机未在 20 秒内唤醒接入（若已亮屏可点\"拍一张\"）",
+                )
             } finally {
                 waking = false
             }
@@ -334,13 +347,13 @@ class CameraManager(
     fun wakeAndReconnect() {
         if (waking) return
         val cameras = _cameras.value
-        // 场景一：相机已连接但休眠（蓝牙链路仍在）
-        val sleepingConnected = cameras.filter {
-            it.ui.value.state == LinkState.CONNECTED && it.ui.value.powerMode == Dji.POWER_SLEEP
+        // 官方 Q&A：相机休眠后必须停止向其发送任何数据（链路指令无效），唤醒必须走广播；
+        // 唤醒时蓝牙链路会短暂断开，由自动重连机制恢复。广播唤醒的前提是近期成功连接过（相机记忆已满足）。
+        val targets = cameras.filter {
+            it.ui.value.state == LinkState.DISCONNECTED ||
+                    (it.ui.value.state == LinkState.CONNECTED && it.ui.value.powerMode == Dji.POWER_SLEEP)
         }
-        // 场景二：已断开的已知相机
-        val disconnected = cameras.filter { it.ui.value.state == LinkState.DISCONNECTED }
-        if (sleepingConnected.isEmpty() && disconnected.isEmpty()) {
+        if (targets.isEmpty()) {
             postMessage(
                 if (cameras.any { it.ui.value.state == LinkState.CONNECTED }) "相机在线且未休眠，无需唤醒"
                 else "没有可唤醒的相机，请先扫描连接一次",
@@ -350,39 +363,19 @@ class CameraManager(
         waking = true
         scope.launch {
             try {
-                // 官方文档：休眠相机必须经过广播唤醒流程；链路指令对部分固件有效，两者都发
-                if (sleepingConnected.isNotEmpty()) {
-                    sleepingConnected.forEach { it.wakeCamera() }
-                }
-                val advMacs = (disconnected.map { it.mac } + sleepingConnected.map { it.mac }).distinct()
-                postMessage("唤醒广播中（0/${advMacs.size}）...")
-                val r = WakeAdvertiser.wake(context, advMacs, perCameraMs = 3000, rounds = 4) { i, n ->
+                val macs = targets.map { it.mac }
+                postMessage("唤醒广播中（0/${macs.size}）...")
+                val r = WakeAdvertiser.wake(context, macs, perCameraMs = 3000, rounds = 4) { i, n ->
                     postMessage("唤醒广播中（$i/$n）...")
                 }
-                if (r.okCount == 0 && r.failCount > 0 && sleepingConnected.isEmpty()) {
+                if (r.okCount == 0 && r.failCount > 0) {
                     postMessage("广播启动失败（错误码 ${r.lastErrorCode}），请开关一次手机蓝牙后重试")
                     return@launch
                 }
-                // 已连接的休眠相机：轮询状态推送确认是否真的醒来
-                if (sleepingConnected.isNotEmpty()) {
-                    var woke = false
-                    repeat(10) {
-                        delay(1000)
-                        if (sleepingConnected.all { it.ui.value.powerMode != Dji.POWER_SLEEP }) {
-                            woke = true
-                        }
-                    }
-                    postMessage(
-                        if (woke) "相机已唤醒"
-                        else "广播唤醒未生效：请手动点亮相机屏幕确认状态（若持续失败请告知相机型号）",
-                    )
-                }
-                if (disconnected.isNotEmpty() && r.okCount > 0) {
-                    postMessage("等待相机开机（约 8 秒）后自动重连...")
-                    delay(8000)
-                    disconnected.forEach { it.connect() }
-                    postMessage("已尝试重连，若未成功请等几秒后手动点\"连接\"")
-                }
+                postMessage("唤醒广播已发送；相机唤醒时蓝牙会短暂断开并自动重连...")
+                delay(8000)
+                targets.filter { it.ui.value.state == LinkState.DISCONNECTED }.forEach { it.connect() }
+                postMessage("已尝试重连，若未成功请等几秒后手动点\"连接\"")
             } finally {
                 waking = false
             }

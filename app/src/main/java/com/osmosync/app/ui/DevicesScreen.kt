@@ -155,7 +155,7 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                         }
                     }
                     Text(
-                        "快照仅在相机在线时立即拍摄；离线的相机只会被唤醒，连接后不会自动拍照",
+                        "快照：离线/休眠的相机先广播唤醒；相机唤醒时蓝牙会短暂断开并自动重连，重连后自动完成拍摄（拍完自动休眠）",
                         fontSize = 10.sp, color = Color.LightGray,
                     )
                 }

@@ -174,11 +174,11 @@ class OsmoCamera(
                         setState(LinkState.DISCONNECTED)
                     } else {
                         scope.launch {
-                            if (retryCount < 3) {
+                            if (retryCount < 5) {
                                 retryCount++
-                                patchUi { it.copy(errorMsg = "连接中断，正在重连($retryCount/3)...") }
+                                patchUi { it.copy(errorMsg = "连接中断，正在重连($retryCount/5)...") }
                                 setState(LinkState.DISCONNECTED)
-                                delay(2000L)
+                                delay(2500L)
                                 connect()
                             } else {
                                 patchUi { it.copy(errorMsg = "连接失败，请确认相机已开机且蓝牙可被连接") }
