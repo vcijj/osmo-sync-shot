@@ -413,6 +413,16 @@ class OsmoCamera(
     suspend fun takePhoto(): Boolean =
         writeBytes(DjiFrame.build(Dji.CMD_SET_GENERAL, Dji.CMD_KEY_REPORT, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.keyReportShutter(), nextSeq()))
 
+    /** 快照键短按（0x03）：关机/休眠状态下拍照，拍完自动休眠。需先完成广播唤醒。 */
+    suspend fun sendSnapshotKey(): Boolean =
+        writeBytes(DjiFrame.build(Dji.CMD_SET_GENERAL, Dji.CMD_KEY_REPORT, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.keyReportSnapshot(), nextSeq()))
+
+    /** 拍录键长按事件 -> 相机关机（官方遥控器手势）。发完即标记用户主动断开，避免重连风暴。 */
+    suspend fun powerOffCamera(): Boolean {
+        userRequestedDisconnect = true
+        return writeBytes(DjiFrame.build(Dji.CMD_SET_GENERAL, Dji.CMD_KEY_REPORT, DjiFrame.CMD_RESPONSE_OR_NOT, Dji.keyReportPowerOff(), nextSeq()))
+    }
+
     /** GPS 数据推送（0x0017，无需应答），payload 由 GpsProvider 组装 */
     suspend fun sendGps(payload: ByteArray): Boolean =
         writeBytes(DjiFrame.build(Dji.CMD_SET_GENERAL, Dji.CMD_GPS_PUSH, DjiFrame.CMD_NO_RESPONSE, payload, nextSeq()))

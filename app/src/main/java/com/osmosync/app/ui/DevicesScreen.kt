@@ -141,6 +141,19 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                             Text("断开")
                         }
                     }
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            onClick = { scope.launch { cam.powerOffCamera() } },
+                            enabled = ui.state == LinkState.CONNECTED,
+                        ) { Text("关机") }
+                        OutlinedButton(onClick = { app.cameraManager.snapshotOff(cam.mac) }) {
+                            Text("快照(关机拍)")
+                        }
+                        OutlinedButton(onClick = { app.cameraManager.forget(cam.mac) }) {
+                            Text("移除")
+                        }
+                    }
                 }
             }
         }

@@ -199,8 +199,17 @@ object Dji {
 
     // ---------- 按键上报（0x0011） ----------
 
-    /** key_code=0x01 拍录键短按事件 -> 拍照模式下拍一张，视频模式下开始/停止录像 */
+    /** key_code=0x01 拍录键短按事件 -> 拍照模式下拍一张，视频模式下开始或停止录像 */
     fun keyReportShutter(): ByteArray = keyReport(KEY_SHUTTER, mode = 1, keyValue = 0)
+
+    /** key_code=0x01 拍录键长按事件 -> 相机关机（官方遥控器手势） */
+    fun keyReportPowerOff(): ByteArray = keyReport(KEY_SHUTTER, mode = 1, keyValue = 1)
+
+    /**
+     * key_code=0x03 快照键短按事件 -> 关机/休眠状态下快速拍照，拍完自动休眠。
+     * 必须先执行广播唤醒流程（见官方快照键说明）。
+     */
+    fun keyReportSnapshot(): ByteArray = keyReport(KEY_SNAPSHOT, mode = 1, keyValue = 0)
 
     fun keyReport(keyCode: Int, mode: Int, keyValue: Int): ByteArray {
         val p = ByteArray(4)

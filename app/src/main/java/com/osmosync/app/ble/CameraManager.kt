@@ -119,10 +119,50 @@ class CameraManager(
                 val connected = connectedCameras()
                 connected.forEachIndexed { i, c -> c.setIndex(if (connected.size == 1) 0 else i + 1) }
             }
+            // 快照流程：唤醒广播后等待相机接入，接入成功即自动发快照键
+            if (pendingSnapshots.remove(camera.mac)) {
+                scope.launch {
+                    delay(500)
+                    val ok = camera.sendSnapshotKey()
+                    postMessage(if (ok) "快照已发送，相机拍完会自动休眠" else "快照指令未应答")
+                }
+            }
         }
 
         override fun onLinkLost(camera: OsmoCamera) {
             // 已在相机内部处理重连/报错
+        }
+    }
+
+    private val pendingSnapshots: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /**
+     * 关机/休眠相机的快照（官方遥控器手势：关机时短按拍照）。
+     * 流程：广播唤醒 → 链路还在则直接发快照键（0x03 短按）；
+     * 链路不在则等相机开机接入（握手成功回调）后自动发，拍完相机自动休眠。
+     */
+    fun snapshotOff(mac: String) {
+        val cam = cameraByMac(mac) ?: return
+        if (waking) {
+            postMessage("另一个唤醒流程正在进行，请稍候")
+            return
+        }
+        waking = true
+        scope.launch {
+            try {
+                postMessage("快照流程：发送唤醒广播...")
+                WakeAdvertiser.wake(context, listOf(mac), perCameraMs = 3000, rounds = 2)
+                if (cam.ui.value.state == LinkState.CONNECTED) {
+                    val ok = cam.sendSnapshotKey()
+                    postMessage(if (ok) "快照已发送，相机拍完会自动休眠" else "快照指令未应答")
+                } else {
+                    pendingSnapshots.add(mac)
+                    postMessage("等待相机开机接入后自动快照（约 20 秒内）...")
+                    cam.connect()
+                }
+            } finally {
+                waking = false
+            }
         }
     }
 
