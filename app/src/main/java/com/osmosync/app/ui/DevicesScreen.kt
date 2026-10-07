@@ -50,6 +50,7 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var showAll by remember { mutableStateOf(false) }
     val connectedCount by app.cameraManager.connectedCount.collectAsState()
+    val sleepingCount by app.cameraManager.sleepingConnectedCount.collectAsState()
 
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 12.dp),
@@ -63,11 +64,15 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                 Text("我的相机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 OutlinedButton(
                     onClick = { app.cameraManager.wakeAndReconnect() },
-                    enabled = connectedCount == 0,
+                    enabled = connectedCount == 0 || sleepingCount > 0,
                 ) { Text("唤醒并重连") }
             }
             if (connectedCount > 0) {
-                Text("有相机处于连接状态，无需唤醒", fontSize = 11.sp, color = Color.Gray)
+                Text(
+                    if (sleepingCount > 0) "检测到 $sleepingCount 台休眠相机，点击按钮直接通过蓝牙唤醒"
+                    else "相机在线且未休眠，无需唤醒",
+                    fontSize = 11.sp, color = Color.Gray,
+                )
             }
         }
         if (cameras.isEmpty()) {

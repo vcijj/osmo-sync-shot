@@ -38,6 +38,7 @@ data class CameraUiState(
     val batteryPercent: Int = -1,
     val cameraMode: Int = -1,
     val camStatus: Int = -1,
+    val powerMode: Int = 0,      // 0=正常 3=休眠（休眠时蓝牙链路仍在）
     val remainCapacityMb: Long = -1,
     val remainPhotoNum: Long = -1,
     val cameraIndex: Int = 0,
@@ -316,6 +317,7 @@ class OsmoCamera(
                             batteryPercent = st.batteryPercent,
                             cameraMode = st.cameraMode,
                             camStatus = st.camStatus,
+                            powerMode = st.powerMode,
                             remainCapacityMb = st.remainCapacityMb,
                             remainPhotoNum = st.remainPhotoNum,
                         )

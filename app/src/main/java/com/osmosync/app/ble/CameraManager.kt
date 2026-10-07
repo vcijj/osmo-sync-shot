@@ -87,15 +87,25 @@ class CameraManager(
     private val _connectedCount = MutableStateFlow(0)
     val connectedCount: StateFlow<Int> = _connectedCount
 
+    /** 已连接但处于休眠的相机数量（蓝牙链路仍在，可直接下发唤醒指令） */
+    private val _sleepingConnectedCount = MutableStateFlow(0)
+    val sleepingConnectedCount: StateFlow<Int> = _sleepingConnectedCount
+
     private val foundMap = LinkedHashMap<String, DeviceHit>()
     private val prefs = context.getSharedPreferences("osmosync", Context.MODE_PRIVATE)
 
     init {
         scope.launch {
             _cameras.flatMapLatest { list ->
-                if (list.isEmpty()) flowOf(0)
-                else combine(list.map { it.ui }) { states -> states.count { it.state == LinkState.CONNECTED } }
-            }.collect { _connectedCount.value = it }
+                if (list.isEmpty()) flowOf(0 to 0)
+                else combine(list.map { it.ui }) { states ->
+                    states.count { it.state == LinkState.CONNECTED } to
+                            states.count { it.state == LinkState.CONNECTED && it.powerMode == Dji.POWER_SLEEP }
+                }
+            }.collect { (c, s) ->
+                _connectedCount.value = c
+                _sleepingConnectedCount.value = s
+            }
         }
     }
 
@@ -294,34 +304,43 @@ class CameraManager(
 
     fun wakeAndReconnect() {
         if (waking) return
-        // 有相机已连接成功时禁用唤醒（避免多余的广播干扰现有连接）
-        if (_connectedCount.value > 0) {
-            postMessage("有相机处于连接状态，无需唤醒")
+        val cameras = _cameras.value
+        // 场景一：相机已连接但休眠（蓝牙链路仍在）→ 直接下发 0x001A 唤醒指令
+        val sleepingConnected = cameras.filter {
+            it.ui.value.state == LinkState.CONNECTED && it.ui.value.powerMode == Dji.POWER_SLEEP
+        }
+        // 场景二：已断开的已知休眠相机 → 广播唤醒 + 自动重连
+        val disconnected = cameras.filter { it.ui.value.state == LinkState.DISCONNECTED }
+        if (sleepingConnected.isEmpty() && disconnected.isEmpty()) {
+            postMessage(
+                if (cameras.any { it.ui.value.state == LinkState.CONNECTED }) "相机在线且未休眠，无需唤醒"
+                else "没有可唤醒的相机，请先扫描连接一次",
+            )
             return
         }
         waking = true
-        val macs = _cameras.value.map { it.mac }
-        if (macs.isEmpty()) {
-            postMessage("还没有已知的相机，请先扫描连接一次")
-            waking = false
-            return
-        }
         scope.launch {
             try {
-                postMessage("唤醒广播中（0/${macs.size}）...需相机处于休眠而非关机状态")
-                val r = WakeAdvertiser.wake(context, macs) { i, n ->
-                    postMessage("唤醒广播中（$i/$n）...")
+                if (sleepingConnected.isNotEmpty()) {
+                    sleepingConnected.forEach { it.wakeCamera() }
+                    postMessage("已通过蓝牙链路唤醒 ${sleepingConnected.size} 台休眠相机")
+                    delay(2000)
                 }
-                when {
-                    r.okCount == 0 && r.failCount > 0 ->
-                        postMessage("广播启动失败（错误码 ${r.lastErrorCode}），请开关一次手机蓝牙后重试")
-                    r.okCount == 0 ->
-                        postMessage("没有可唤醒的相机")
-                    else -> {
-                        postMessage("唤醒广播已发送，等待相机开机（约 10 秒）后自动重连...")
-                        delay(8000) // 等相机完成开机
-                        _cameras.value.filter { it.ui.value.state == LinkState.DISCONNECTED }.forEach { it.connect() }
-                        postMessage("已尝试重连，若未成功请等几秒后手动点\"连接\"")
+                if (disconnected.isNotEmpty()) {
+                    val macs = disconnected.map { it.mac }
+                    postMessage("唤醒广播中（0/${macs.size}）...需相机处于休眠而非关机状态")
+                    val r = WakeAdvertiser.wake(context, macs) { i, n ->
+                        postMessage("唤醒广播中（$i/$n）...")
+                    }
+                    when {
+                        r.okCount == 0 && r.failCount > 0 ->
+                            postMessage("广播启动失败（错误码 ${r.lastErrorCode}），请开关一次手机蓝牙后重试")
+                        r.okCount > 0 -> {
+                            postMessage("唤醒广播已发送，等待相机开机（约 10 秒）后自动重连...")
+                            delay(8000) // 等相机完成开机
+                            disconnected.forEach { it.connect() }
+                            postMessage("已尝试重连，若未成功请等几秒后手动点\"连接\"")
+                        }
                     }
                 }
             } finally {
