@@ -215,7 +215,8 @@ class CameraManager(
 
     private fun ScanRecord?.isDjiCameraAdv(): Boolean {
         if (this == null) return false
-        val sparse = try { manufacturerSpecificData } catch (_: Exception) { return false }
+        // 部分设备广播不含厂商数据，manufacturerSpecificData 会返回 null（不抛异常）
+        val sparse = try { manufacturerSpecificData } catch (_: Exception) { return false } ?: return false
         for (i in 0 until sparse.size()) {
             val cid = sparse.keyAt(i)
             val data = sparse.valueAt(i) ?: continue
