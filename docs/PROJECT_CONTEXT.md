@@ -235,6 +235,8 @@ util/      CrashGuard（崩溃捕获，下次启动弹窗）、LogExport（拍�
 6. **android-34 平台 jar**：BluetoothGattServerCallback 回调签名无 server 参数
 7. AGP 对中文路径报错：`android.overridePathCheck=true`
 8. 功能假设要与协议现实核对（休眠/断开/排队），用户反馈的问题常源于状态假设错误
+9. **BLE 扫描空指针**（v1.19）：`ScanRecord.manufacturerSpecificData` 对无厂商数据的广播返回 **null 而不是抛异常**，必须 `?: return false`（CrashGuard 抓到的线上案例）
+10. **github.com 主站可能被阻断而 api.github.com 可用**：git push 全挂时，用 Contents API（PUT /repos/{}/contents/，base64 内容+文件 sha）逐文件上传、PATCH /git/refs/tags/xx 移 tag；**切勿在 fetch 失败后 reset --hard**（会把本地提交退掉，需重新打补丁）
 
 ## 8. 本机构建环境（Windows，有坑）
 
