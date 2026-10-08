@@ -58,8 +58,6 @@ class CameraManager(
     private val context: Context,
     val identity: RemoteIdentity,
     private val gps: com.osmosync.app.gps.GpsProvider,
-    private val trackStore: com.osmosync.app.track.TrackStore? = null,
-    private val orientation: com.osmosync.app.gps.OrientationProvider? = null,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -406,12 +404,11 @@ class CameraManager(
     private val _gpsPushing = MutableStateFlow(false)
     val gpsPushing: StateFlow<Boolean> = _gpsPushing
 
-    /** 开关：把手机 GPS 按 1Hz 推给所有已连接相机（相机写入照片元数据），同时记录轨迹 */
+    /** 开关：把手机 GPS 按 1Hz 推给所有已连接相机（相机写入照片元数据） */
     fun setGpsPush(enabled: Boolean) {
         if (enabled) {
             if (gpsJob != null) return
             gps.start()
-            orientation?.start()
             _gpsPushing.value = true
             gpsJob = scope.launch {
                 while (true) {
@@ -421,23 +418,6 @@ class CameraManager(
                         connectedCameras().forEach { cam ->
                             try { cam.sendGps(payload) } catch (_: Exception) {}
                         }
-                        // 连续轨迹点：每 4 秒记录一次移动轨迹
-                        val now = System.currentTimeMillis()
-                        if (trackStore != null && now - lastTrackAddMs > 4000) {
-                            lastTrackAddMs = now
-                            trackStore.add(
-                                com.osmosync.app.track.TrackPoint(
-                                    timeMs = now,
-                                    lat = fix.latitude,
-                                    lon = fix.longitude,
-                                    headingDeg = null,
-                                    altitudeM = fix.altitudeM,
-                                    isShot = false,
-                                    shotIndex = null,
-                                    photoUri = null,
-                                ),
-                            )
-                        }
                     }
                     delay(1000)
                 }
@@ -446,12 +426,9 @@ class CameraManager(
             gpsJob?.cancel()
             gpsJob = null
             gps.stop()
-            orientation?.stop()
             _gpsPushing.value = false
         }
     }
-
-    @Volatile private var lastTrackAddMs = 0L
 
     private fun buildGpsPayload(f: com.osmosync.app.gps.GpsFix): ByteArray {
         val cal = java.util.Calendar.getInstance()

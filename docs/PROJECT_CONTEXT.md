@@ -7,11 +7,11 @@
 
 ## 1. 项目概览
 
-- **是什么**：安卓 App「大疆同步连拍」（osmo-sync-shot）——一台手机通过 BLE 遥控多台运动相机（大疆 Osmo Action / Osmo 360 + 影石 Insta360），支持定时同步连拍、多手机协同、GPS 注入、轨迹地图、照片导入等。
+- **是什么**：安卓 App「大疆同步连拍」（osmo-sync-shot）——一台手机通过 BLE 遥控多台运动相机（大疆 Osmo Action / Osmo 360 + 影石 Insta360），支持定时同步连拍、多手机协同、GPS 注入、照片导入等。
 - **GitHub**：https://github.com/vcijj/osmo-sync-shot （公开，MIT，账号 vcijj）
 - **本地路径**：`C:\Users\w\Desktop\安卓手机控制大疆相机`（路径含中文，gradle.properties 已加 `android.overridePathCheck=true`）
-- **当前版本**：v1.18（versionCode 19）
-- **技术栈**：Kotlin + Jetpack Compose + Material3，minSdk 26 / targetSdk 34，CameraX，osmdroid，kotlinx-coroutines
+- **当前版本**：v1.20（versionCode 21）
+- **技术栈**：Kotlin + Jetpack Compose + Material3，minSdk 26 / targetSdk 34，CameraX，kotlinx-coroutines
 - **包名**：`com.osmosync.app`
 - **用户的相机**：Osmo Action 5 Pro（0xFF44）+ Osmo 360 一代（0xFF66）；测试手机小米 17（HyperOS/Android 16）
 
@@ -26,14 +26,15 @@ ble/       OsmoCamera（单相机 GATT 连接/握手状态机/指令收发）、
 insta360/  Insta360Remote（模拟影石 GPS 遥控器：GATT Server 0xCE80 + 广播，相机主动连手机）
 shooter/   IntervalShooter（定时连拍调度：绝对开始时刻、每张回调、会话结束回调）
 phone/     PhoneCameraController（CameraX 拍照 + GPS EXIF + 预览接续）
-gps/       GpsProvider（定位 + 卫星数）、OrientationProvider（罗盘朝向 azimuth）
-track/     TrackStore（轨迹点 JSON 持久化）、GeoConv（WGS84→GCJ02）
+gps/       GpsProvider（定位 + 卫星数）
 mesh/      MeshManager（多手机协同主从：UDP 47016 发现 + TCP 47017 JSON + NTP 式时钟校准）
 importer/  CameraImporter（SAF 树扫描 DJI_*.JPG → MediaStore 导入）
 service/   CaptureService（连拍前台服务 + WakeLock）
-ui/        MainActivity（权限门 + 4 页签）、DevicesScreen、ShootScreen、MeshScreen、TrackScreen
+ui/        MainActivity（权限门 + 3 页签）、DevicesScreen、ShootScreen、MeshScreen
 util/      CrashGuard（崩溃捕获，下次启动弹窗）、LogExport（拍摄清单 JSON 导出）
 ```
+
+> 注：轨迹地图功能（track/ 包、OrientationProvider 罗盘、osmdroid 依赖）已于 v1.20 按用户要求整体移除，代码可在 git 历史（v1.19 tag）找回。
 
 ## 3. 大疆 DJI R SDK 协议速查（全部经过实现验证）
 
@@ -224,6 +225,8 @@ util/      CrashGuard（崩溃捕获，下次启动弹窗）、LogExport（拍�
 | v1.16 | 连接后不再自动发拍摄信号（移除快照排队补发） |
 | v1.17 | 按官方 Q&A 全面修正：休眠禁发数据、唤醒断开重连（5次/2.5s）、快照=重连后普通快门单击；唤醒包与官方实拍逐字节核对一致 |
 | v1.18 | 单机关机升级为"全部关机"（多机收工一键关） |
+| v1.19 | 修复扫描崩溃：无厂商数据的广播 manufacturerSpecificData 返回 null（CrashGuard 抓获） |
+| v1.20 | 按用户要求整体移除轨迹地图功能（含 osmdroid 依赖、罗盘朝向） |
 
 ## 7. 调试经验教训（避免重蹈覆辙）
 
@@ -237,6 +240,7 @@ util/      CrashGuard（崩溃捕获，下次启动弹窗）、LogExport（拍�
 8. 功能假设要与协议现实核对（休眠/断开/排队），用户反馈的问题常源于状态假设错误
 9. **BLE 扫描空指针**（v1.19）：`ScanRecord.manufacturerSpecificData` 对无厂商数据的广播返回 **null 而不是抛异常**，必须 `?: return false`（CrashGuard 抓到的线上案例）
 10. **github.com 主站可能被阻断而 api.github.com 可用**：git push 全挂时，用 Contents API（PUT /repos/{}/contents/，base64 内容+文件 sha）逐文件上传、PATCH /git/refs/tags/xx 移 tag；**切勿在 fetch 失败后 reset --hard**（会把本地提交退掉，需重新打补丁）
+11. **DjiFrame.parse 返回绝对帧尾、feed 却 `off +=` 累加**（Android 版隐性 bug，移植时发现）：单帧通知时恰好正确（常态），但一条 FFF4 通知里出现**两个完整 0xAA 帧**时 off 会翻倍越界/重复解析。生产未触发是因为相机通常一帧一通知。鸿蒙版已按正确语义实现（`off = lastConsumed`，lastConsumed=帧尾绝对位置含跳过的垃圾字节）；Android 版如要修，改 feed 为 `off = parsed.second` 即可
 
 ## 8. 本机构建环境（Windows，有坑）
 
@@ -256,7 +260,6 @@ util/      CrashGuard（崩溃捕获，下次启动弹窗）、LogExport（拍�
 - [ ] 录像切换（先切视频模式再开始录像）
 - [ ] Insta360 遥控模式（用户尚未提供影石型号/测试结果）
 - [ ] GPS 注入后相机照片是否带 GPS
-- [ ] 轨迹页显示（v1.8 修复后未再反馈）
 - [ ] USB 导入
 - [ ] 多手机协同（需两台手机）
 
@@ -273,3 +276,28 @@ util/      CrashGuard（崩溃捕获，下次启动弹窗）、LogExport（拍�
 2. 说明本次要做什么（新功能 / 修 bug / 用户反馈转发）
 3. 构建验证按 §8 的命令与坑执行；发布流程 = 版本号+1 → `git push` → 打 tag → GitHub Release 附 APK（凭据在 Windows 凭据管理器）
 4. 用户偏好备忘：中文交流；原生 Kotlin（已确认过技术栈）；功能行为必须可预期（反感"意外拍照"类副作用）；反馈问题时常一句话描述，需要主动追问现象/提示文字/型号
+
+## 11. 鸿蒙移植（2026-10-08 完成首个源码版本，未真机验证）
+
+**位置**：`harmony/`（DevEco Studio 5.0 工程，stage 模型，compatibleSdkVersion 5.0.0(12)，
+bundleName com.osmosync.app）。构建必须用华为官方 DevEco Studio（本机未装，源码交付），
+详见 `harmony/README.md`。
+
+**按用户要求裁剪**：多手机协同（mesh/UDP/TCP）与轨迹页（track/地图）不做；其余功能对照
+Android v1.18 全部移植。
+
+**状态与要点**：
+- 协议层（Crc/DjiFrame/Dji）字节级移植，已用 §3.4 两帧已知好帧回归验证（Node 跑，逐字节一致）
+- BLE 用 `@kit.ConnectivityKit` ble 模块 API 12 写法：`writeCharacteristicValue`（非旧 writeBLECharacteristicValue）、
+  `setCharacteristicChangeNotification`（系统自动写 CCCD）、`setBLEMtuSize(247)`（默认 23 必须协商）、
+  广播用 API 11+ `startAdvertising(AdvertisingParams)` 返回 advId、GATT Server 用
+  addService/sendResponse/notifyCharacteristicChanged；扫描结果无解析字段（API 22+ 才有），
+  自写 AD 结构解析器取厂商字段
+- 状态管理：StateFlow → `@ObservedV2`/`@Trace` 状态类；协程 → Promise + Async.ets（Deferred/Mutex/withTimeoutOrNull）
+- 长时任务保活：`backgroundTaskManager.startBackgroundRunning(ctx, BLUETOOTH_INTERACTION, wantAgent)`，
+  module.json5 已配 `backgroundModes: ["bluetoothInteraction"]` 与 KEEP_BACKGROUND_RUNNING 权限
+- **最大平台风险（待真机验证）**：鸿蒙扫描返回隐私**虚拟 MAC**——GATT 连接不受影响，但 WKP
+  唤醒广播按真实 MAC 逐字节比对，可能不命中；API 16+ 可试 `access.addPersistentDeviceId`
+- 手机照片存 App 沙箱 files/photos/（相册直存要受限权限/安全控件）；导入改 DocumentViewPicker
+  多选；其余差异见 harmony/README.md §3/§5
+- 真机清单见 harmony/README.md §6

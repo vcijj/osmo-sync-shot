@@ -5,12 +5,10 @@ import android.content.Context
 import com.osmosync.app.ble.CameraManager
 import com.osmosync.app.ble.RemoteIdentity
 import com.osmosync.app.gps.GpsProvider
-import com.osmosync.app.gps.OrientationProvider
 import com.osmosync.app.insta360.Insta360Remote
 import com.osmosync.app.mesh.MeshManager
 import com.osmosync.app.phone.PhoneCameraController
 import com.osmosync.app.shooter.IntervalShooter
-import com.osmosync.app.track.TrackStore
 import com.osmosync.app.util.CrashGuard
 
 class App : Application() {
@@ -20,8 +18,6 @@ class App : Application() {
     lateinit var phone: PhoneCameraController
     lateinit var shooter: IntervalShooter
     lateinit var gps: GpsProvider
-    lateinit var orientation: OrientationProvider
-    lateinit var trackStore: TrackStore
     lateinit var insta360: Insta360Remote
     lateinit var mesh: MeshManager
         private set
@@ -32,12 +28,10 @@ class App : Application() {
         CrashGuard.install(this)
         identity = RemoteIdentity(getSharedPreferences("osmosync", Context.MODE_PRIVATE))
         gps = GpsProvider(this)
-        orientation = OrientationProvider(this)
-        trackStore = TrackStore(this)
-        cameraManager = CameraManager(this, identity, gps, trackStore, orientation)
+        cameraManager = CameraManager(this, identity, gps)
         phone = PhoneCameraController(this)
         phone.attachGps(gps)
-        shooter = IntervalShooter(cameraManager, phone, gps, orientation, trackStore)
+        shooter = IntervalShooter(cameraManager, phone)
         MeshManager.initContext(this)
         mesh = MeshManager(cameraManager, shooter)
         insta360 = Insta360Remote(this)
