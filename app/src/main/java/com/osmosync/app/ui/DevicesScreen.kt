@@ -68,11 +68,15 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                 ) { Text("唤醒并重连") }
             }
             if (connectedCount > 0) {
-                Text(
-                    if (sleepingCount > 0) "检测到 $sleepingCount 台休眠相机，点击按钮直接通过蓝牙唤醒"
-                    else "相机在线且未休眠，无需唤醒",
-                    fontSize = 11.sp, color = Color.Gray,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (sleepingCount > 0) "检测到 $sleepingCount 台休眠相机，点击按钮直接通过蓝牙唤醒"
+                        else "相机在线且未休眠，无需唤醒",
+                        fontSize = 11.sp, color = Color.Gray,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedButton(onClick = { app.cameraManager.powerOffAll() }) { Text("全部关机") }
+                }
             }
         }
         if (cameras.isEmpty()) {
@@ -143,10 +147,6 @@ fun DevicesScreen(modifier: Modifier = Modifier) {
                     }
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(
-                            onClick = { scope.launch { cam.powerOffCamera() } },
-                            enabled = ui.state == LinkState.CONNECTED,
-                        ) { Text("关机") }
                         OutlinedButton(onClick = { app.cameraManager.snapshotOff(cam.mac) }) {
                             Text("快照(关机拍)")
                         }

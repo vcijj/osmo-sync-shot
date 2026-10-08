@@ -384,6 +384,22 @@ class CameraManager(
 
     // ---------------- 批量指令 ----------------
 
+    /** 收工一键关机：向所有已连接相机发送拍录键长按事件（官方遥控器手势） */
+    fun powerOffAll() {
+        val cams = connectedCameras()
+        if (cams.isEmpty()) {
+            postMessage("没有已连接的相机")
+            return
+        }
+        scope.launch {
+            cams.forEach { cam ->
+                cam.powerOffCamera()
+                delay(150)
+            }
+            postMessage("已向 ${cams.size} 台相机发送关机指令")
+        }
+    }
+
     private var gpsJob: kotlinx.coroutines.Job? = null
 
     private val _gpsPushing = MutableStateFlow(false)
