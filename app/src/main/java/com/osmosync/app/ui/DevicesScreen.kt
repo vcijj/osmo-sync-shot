@@ -245,6 +245,7 @@ private fun Insta360Card() {
     val enabled by app.insta360.enabled.collectAsState()
     val cams by app.insta360.cams.collectAsState()
     val status by app.insta360.status.collectAsState()
+    val lastWrite by app.insta360.lastWrite.collectAsState()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -260,6 +261,9 @@ private fun Insta360Card() {
             }
             if (status.isNotBlank()) {
                 Text(status, fontSize = 12.sp, color = if (cams.isEmpty()) Color.Gray else Color(0xFF1B873B))
+            }
+            if (lastWrite.isNotBlank()) {
+                Text("相机指令: $lastWrite", fontSize = 11.sp, color = Color(0xFF2E6DE6))
             }
             cams.forEach { cam ->
                 Text(

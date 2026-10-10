@@ -43,6 +43,10 @@ class Insta360Remote(private val context: Context) {
     private val _status = MutableStateFlow("")
     val status: StateFlow<String> = _status
 
+    /** 相机最近一次写入 CE81 的原始字节（诊断用） */
+    private val _lastWrite = MutableStateFlow("")
+    val lastWrite: StateFlow<String> = _lastWrite
+
     private var gattServer: BluetoothGattServer? = null
     private var ce82: BluetoothGattCharacteristic? = null
     private var oldName: String? = null
@@ -59,17 +63,19 @@ class Insta360Remote(private val context: Context) {
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
         val REMOTE_NAME = "Insta360 GPS Remote"
 
-        // 相机用于识别遥控器的二级服务
+        // 相机用于识别遥控器的二级服务（128 位自定义 UUID）
         val SERVICE2_UUID: UUID = UUID.fromString("0000d0ff-3c17-d293-8e48-14fe2e4da212")
-        val FFD1_UUID: UUID = UUID.fromString("0000ffd1-3c17-d293-8e48-14fe2e4da212")
-        val FFD2_UUID: UUID = UUID.fromString("0000ffd2-3c17-d293-8e48-14fe2e4da212")
-        val FFD3_UUID: UUID = UUID.fromString("0000ffd3-3c17-d293-8e48-14fe2e4da212")
-        val FFD4_UUID: UUID = UUID.fromString("0000ffd4-3c17-d293-8e48-14fe2e4da212")
-        val FFD5_UUID: UUID = UUID.fromString("0000ffd5-3c17-d293-8e48-14fe2e4da212")
-        val FFD8_UUID: UUID = UUID.fromString("0000ffd8-3c17-d293-8e48-14fe2e4da212")
-        val FFF1_UUID: UUID = UUID.fromString("0000fff1-3c17-d293-8e48-14fe2e4da212")
-        val FFF2_UUID: UUID = UUID.fromString("0000fff2-3c17-d293-8e48-14fe2e4da212")
-        val FFE0_UUID: UUID = UUID.fromString("0000ffe0-3c17-d293-8e48-14fe2e4da212")
+        // 其特征值在 ESP32 源码里是 16 位短 UUID（"ffd1" 等），按 BLE 规范展开为标准 SIG 基座；
+        // v1.21 修正：此前错误地把它们建在 D0FF 自定义基座下，相机"验货"失败直接断开
+        val FFD1_UUID: UUID = UUID.fromString("0000ffd1-0000-1000-8000-00805f9b34fb")
+        val FFD2_UUID: UUID = UUID.fromString("0000ffd2-0000-1000-8000-00805f9b34fb")
+        val FFD3_UUID: UUID = UUID.fromString("0000ffd3-0000-1000-8000-00805f9b34fb")
+        val FFD4_UUID: UUID = UUID.fromString("0000ffd4-0000-1000-8000-00805f9b34fb")
+        val FFD5_UUID: UUID = UUID.fromString("0000ffd5-0000-1000-8000-00805f9b34fb")
+        val FFD8_UUID: UUID = UUID.fromString("0000ffd8-0000-1000-8000-00805f9b34fb")
+        val FFF1_UUID: UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")
+        val FFF2_UUID: UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb")
+        val FFE0_UUID: UUID = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
 
         private val CMD_SCREEN = byteArrayOf(0xFC.toByte(), 0xEF.toByte(), 0xFE.toByte(), 0x86.toByte(), 0x00, 0x03, 0x01, 0x00, 0x00)
         private val CMD_POWER_OFF = byteArrayOf(0xFC.toByte(), 0xEF.toByte(), 0xFE.toByte(), 0x86.toByte(), 0x00, 0x03, 0x01, 0x00, 0x03)
@@ -105,7 +111,10 @@ class Insta360Remote(private val context: Context) {
             characteristic: BluetoothGattCharacteristic?, preparedWrite: Boolean,
             responseNeeded: Boolean, offset: Int, value: ByteArray?,
         ) {
-            // 相机写 CE81（状态/回执），v1 忽略内容仅应答
+            // 相机写 CE81（状态/回执）：记录原始字节用于诊断，仅应答不处理
+            if (value != null && value.isNotEmpty()) {
+                _lastWrite.value = value.joinToString("") { "%02X".format(it) }
+            }
             if (responseNeeded && device != null) {
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
             }
